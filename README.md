@@ -1,114 +1,89 @@
 # RabbitMQ Node.js Demo
 
-A modular microservices application demonstrating producer-consumer pattern with RabbitMQ.
+A lightweight microservices application demonstrating producer-consumer pattern with RabbitMQ using exchange-based routing.
 
 ## Project Structure
 
 ```
-rabbitmq-node-demo/
-├── docker-compose.yml
+nodejsRabbitMq/
+├── docker-compose.yml      # Docker compose setup for RabbitMQ, Producer, and Worker
+├── package.json            # Root workspace configuration (ESM)
 ├── producer/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── index.js       # Application entry point
-│       ├── config.js      # Configuration management
-│       ├── utils.js       # Logging utilities
-│       ├── routes.js      # Express routes
-│       ├── task.js        # Task validation & normalization
-│       ├── producer.js    # Message producer logic
-│       └── rabbit.js      # RabbitMQ connection management
+│       └── index.js        # Express API + RabbitMQ producer
 └── worker/
     ├── Dockerfile
     ├── package.json
     └── src/
-        ├── index.js       # Application entry point
-        ├── config.js      # Configuration management
-        ├── utils.js       # Logging utilities
-        ├── task.js        # Task processing logic
-        └── rabbit.js      # RabbitMQ connection management
+        └── index.js        # RabbitMQ consumer
 ```
 
-## Module Architecture
+## Architecture
 
-### Producer Service (6 modules)
+### Producer Service
+- **Framework**: Express.js
+- **Endpoints**:
+  - `GET /health` - Health check endpoint
+  - `POST /tasks` - Submit a task for processing
+- **RabbitMQ**: Publishes messages to exchange with routing key
+- **Port**: 3000
 
-#### `config.js`
-Centralized configuration management with environment variables.
-
-#### `utils.js`
-Logging functions and helper utilities.
-
-#### `task.js`
-Task validation and normalization with default values.
-
-#### `rabbit.js`
-RabbitMQ connection management with automatic retry logic.
-
-#### `routes.js`
-Express routes and API endpoints.
-- `GET /health` - Health check
-- `POST /tasks` - Submit a task
-
-#### `index.js`
-Application bootstrap and lifecycle management.
-
-### Worker Service (5 modules)
-
-#### `config.js`
-Service configuration and environment variables.
-
-#### `utils.js`
-Logging utilities and helper functions.
-
-#### `task.js`
-Task processing with simulated work and error handling.
-
-#### `rabbit.js`
-RabbitMQ consumer - connects and starts message consumption with automatic retry.
-
-#### `index.js`
-Worker startup and graceful shutdown.
+### Worker Service
+- **RabbitMQ**: Consumes messages from queue
+- **Features**: 
+  - Simulated task processing with configurable delay
+  - Error handling with message rejection
+  - Graceful shutdown on SIGINT
+  - Configurable message prefetch
 
 ## Quick Start
 
-### Using Docker Compose
+### Using Docker Compose (Recommended)
 
 ```bash
 docker-compose up
 ```
 
 This starts:
-- RabbitMQ (port 5672, UI on 15672)
-- Producer service (port 3000)
-- Worker service
+- **RabbitMQ** - Message broker (port 5672, Management UI on 15672)
+- **Producer** - REST API (port 3000)
+- **Worker** - Message consumer
 
 ### Manual Setup
 
-**Producer:**
-```bash
-cd producer
-npm install
-npm start
-```
+**Prerequisites**: Node.js 18+, RabbitMQ running locally
 
-**Worker:**
-```bash
-cd worker
-npm install
-npm start
-```
-
-**RabbitMQ:**
+**Start RabbitMQ**:
 ```bash
 docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
-## API Endpoints
+**Install dependencies**:
+```bash
+npm install
+```
+
+**Run Producer** (Terminal 1):
+```bash
+npm run producer
+# or with auto-reload:
+# cd producer && npm run dev
+```
+
+**Run Worker** (Terminal 2):
+```bash
+npm run worker
+# or with auto-reload:
+# cd worker && npm run dev
+```
+
+## API Usage
 
 ### Health Check
 ```bash
-GET http://localhost:3000/health
+curl http://localhost:3000/health
 ```
 
 Response:
@@ -118,15 +93,19 @@ Response:
 
 ### Submit Task
 ```bash
-POST http://localhost:3000/tasks
-Content-Type: application/json
-
-{
-  "taskId": "my-task-1",    // optional: auto-generated if omitted
-  "ms": 500,                // optional: processing time (default: 300)
-  "fail": false             // optional: simulate failure (default: false)
-}
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taskId": "my-task-1",
+    "ms": 500,
+    "fail": false
+  }'
 ```
+
+**Request Fields**:
+- `taskId` (optional): Unique task identifier. Auto-generated if omitted (`task_<timestamp>`)
+- `ms` (optional): Processing time in milliseconds (default: 300)
+- `fail` (optional): Simulate task failure for testing (default: false)
 
 Response (202 Accepted):
 ```json
@@ -136,82 +115,145 @@ Response (202 Accepted):
 }
 ```
 
-## Design Principles
+## RabbitMQ Configuration
 
-### Separation of Concerns
-- Each module has a single responsibility
-- Clear module dependencies
-- Easy to test and maintain
+The project uses exchange-based routing with the following topology:
 
-### Configuration Management
-- All settings in `config.js`
-- Environment variables support
-- Sensible defaults
-
-### Error Handling
-- Graceful shutdown on signals
-- Uncaught exception handling
-- Automatic retry with backoff
-- Message nack/requeue on failures
-
-### Logging
-- Consistent log formatting
-- Prefixed messages for service identification
-- Error tracking and debugging
-
-### RabbitMQ Features
-- **Durable queues**: Survive RabbitMQ restarts
-- **Persistent messages**: Saved to disk
-- **Prefetch**: Load balancing across workers
-- **Acknowledgment**: Manual message ACK/NACK
-- **Requeue**: Failed messages requeued automatically
-
-## Development
-
-### Adding New Features
-
-1. **New Endpoint**: Add route in `routes.js`
-2. **New Config**: Add to `config.js`
-3. **New Logic**: Create dedicated module
-4. **New Utility**: Add to `utils.js`
-
-### Testing
-
-Run producer in one terminal:
-```bash
-npm run dev
-```
-
-Submit test tasks:
-```bash
-curl -X POST http://localhost:3000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"ms": 2000, "fail": false}'
-```
-
-Watch worker process tasks in another terminal.
+| Component | Value |
+|-----------|-------|
+| Exchange | `tasks.x` |
+| Exchange Type | `direct` |
+| Queue | `tasks.q` |
+| Routing Key | `task.process` |
+| Queue Durability | Yes (durable: true) |
+| Message Persistence | Yes (persistent: true) |
+| Prefetch Count | 5 messages |
 
 ## Environment Variables
 
 ### Producer
-- `RABBIT_URL`: RabbitMQ connection string
-- `QUEUE`: Queue name (default: tasks)
-- `PORT`: HTTP port (default: 3000)
+```env
+RABBIT_URL=amqp://guest:guest@localhost:5672
+EXCHANGE=tasks.x
+EXCHANGE_TYPE=direct
+ROUTING_KEY=task.process
+QUEUE=tasks.q
+PORT=3000
+```
 
 ### Worker
-- `RABBIT_URL`: RabbitMQ connection string
-- `QUEUE`: Queue name (default: tasks)
-- `PREFETCH`: Messages to process concurrently (default: 5)
+```env
+RABBIT_URL=amqp://guest:guest@localhost:5672
+EXCHANGE=tasks.x
+EXCHANGE_TYPE=direct
+ROUTING_KEY=task.process
+QUEUE=tasks.q
+PREFETCH=5
+```
 
-## Performance Tips
+## How It Works
 
-1. Adjust `PREFETCH` based on task complexity
-2. Use connection pooling for high throughput
-3. Implement circuit breakers for fault tolerance
-4. Monitor queue depth and processing times
+1. **Producer** receives HTTP POST request with task details
+2. **Producer** publishes message to RabbitMQ exchange with routing key
+3. **Message** is routed to queue based on exchange and routing key
+4. **Worker** consumes message from queue
+5. **Worker** processes task (simulated delay + optional failure)
+6. **Worker** acknowledges (ack) on success or rejects (nack) on failure
+7. **Failed messages** are not requeued and are discarded
+
+## RabbitMQ Features Used
+
+- **Durable Exchanges & Queues**: Survive broker restarts
+- **Persistent Messages**: Saved to disk, survive broker restarts
+- **Direct Exchange**: Reliable routing based on routing key
+- **Consumer Prefetch**: Load balancing and QoS control
+- **Manual Acknowledgment**: Explicit message processing confirmation
+- **Message Rejection**: Failed messages handled gracefully
+
+## Testing
+
+### Test Successful Task Processing
+```bash
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"ms": 1000}'
+```
+
+Watch worker logs - should process and ack the message.
+
+### Test Failed Task Processing
+```bash
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"ms": 500, "fail": true}'
+```
+
+Watch worker logs - should reject the message.
+
+### Test Multiple Tasks
+```bash
+for i in {1..10}; do
+  curl -X POST http://localhost:3000/tasks \
+    -H "Content-Type: application/json" \
+    -d "{\"ms\": $((RANDOM % 2000 + 100))}"
+done
+```
+
+## RabbitMQ Management UI
+
+Access the RabbitMQ Management Console:
+- **URL**: http://localhost:15672
+- **Username**: guest
+- **Password**: guest
+
+Features:
+- Monitor queues and message counts
+- View exchange bindings
+- Test publish/subscribe
+- Monitor connections
+
+## Troubleshooting
+
+### Producer Connection Error
+- Ensure RabbitMQ is running and accessible at `RABBIT_URL`
+- Check network connectivity and firewall rules
+- Verify credentials in environment variables
+
+### No Messages in Queue
+- Check producer logs for publish errors
+- Verify routing key matches in producer and worker
+- Ensure exchange and queue exist (should be auto-created on startup)
+
+### Worker Not Processing Messages
+- Verify worker is connected (check logs)
+- Check `PREFETCH` setting doesn't exceed available workers
+- Ensure queue name matches between producer and worker
+
+### Port Already in Use
+```bash
+# Find process on port 3000
+lsof -i :3000
+# Kill process
+kill -9 <PID>
+```
+
+## Development Notes
+
+- **ESM Format**: Project uses ES modules (`type: "module"` in package.json)
+- **No Transpilation**: Uses native Node.js 18+ features
+- **Monorepo**: Root package.json manages workspace dependencies
+- **Graceful Shutdown**: Both services handle SIGINT (Ctrl+C) properly
+
+## Performance Considerations
+
+1. **Prefetch Settings**: Adjust `PREFETCH` env var based on worker throughput
+   - Lower for long-running tasks
+   - Higher for short tasks
+2. **Message Persistence**: Enabled by default, slight performance impact
+3. **Queue Durability**: Recommended for production reliability
+4. **Connection Pooling**: Currently single connection per service, suitable for demo
 
 ## License
 
 ISC
-
 
