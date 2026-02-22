@@ -1,0 +1,14 @@
+{
+  "name": "rabbitmq-demo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["producer", "worker"],
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "express": "^4.19.2"
+  },
+  "scripts": {
+    "producer": "node producer/src/index.js",
+    "worker": "node worker/src/index.js"
+  }
+}

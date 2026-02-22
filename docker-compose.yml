@@ -1,0 +1,38 @@
+x-rabbit-env: &rabbit_env
+  RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+  EXCHANGE: tasks.x
+  EXCHANGE_TYPE: direct
+  ROUTING_KEY: task.process
+  QUEUE: tasks.q
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  producer:
+    build:
+      context: .
+      dockerfile: producer/Dockerfile
+    environment:
+      <<: *rabbit_env
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - rabbitmq
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      <<: *rabbit_env
+      PREFETCH: "5"
+    depends_on:
+      - rabbitmq
